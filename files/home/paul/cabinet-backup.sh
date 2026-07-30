@@ -102,7 +102,10 @@ echo "-- writing manifest"
 {
     echo "# Arcade cabinet manifest"
     echo
-    echo "Generated $(date '+%Y-%m-%d %H:%M:%S') on $(hostname)"
+    # No timestamp here on purpose -- git records when each snapshot was taken,
+    # and a date in the file would make every nightly run look like a change,
+    # so the "nothing changed" check below would never fire.
+    echo "Host: $(hostname)"
     echo
     echo '## System'
     echo '```'

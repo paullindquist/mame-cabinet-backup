@@ -1,6 +1,6 @@
 # Arcade cabinet manifest
 
-Generated 2026-07-30 14:34:32 on paul
+Host: paul
 
 ## System
 ```
