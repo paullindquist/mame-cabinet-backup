@@ -1,0 +1,5 @@
+# Never let ROMs or bulk artwork into this repo -- it is meant to stay small
+# enough to push over the cabinet's wifi in a second.
+*.zip
+*.7z
+*.chd

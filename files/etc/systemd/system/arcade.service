@@ -1,0 +1,25 @@
+[Unit]
+Description=Arcade frontend (Attract-Mode Plus)
+After=systemd-user-sessions.service getty@tty1.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=paul
+Group=paul
+PAMName=login
+WorkingDirectory=/home/paul
+Environment=HOME=/home/paul
+Environment=SDL_VIDEODRIVER=kmsdrm
+ExecStart=/usr/local/bin/attractplus
+Restart=always
+RestartSec=2
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
