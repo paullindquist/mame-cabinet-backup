@@ -62,3 +62,6 @@ dtoverlay=vc4-kms-v3d,cma-128
 dtoverlay=dwc2,dr_mode=host
 
 [all]
+
+# Arcade cabinet: suppress the firmware's colour-test screen at power-on.
+disable_splash=1
