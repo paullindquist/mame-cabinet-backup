@@ -46,6 +46,7 @@ FILES=(
     # A private key in a backup is a private key in every copy of the backup.
     /home/paul/.ssh/config
     /home/paul/hide-boot-splash.sh
+    /home/paul/static-ip.sh
     /home/paul/install-splash-theme.sh
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png
