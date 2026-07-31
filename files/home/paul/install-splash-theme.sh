@@ -54,6 +54,10 @@ if [ "${1:-}" = "--revert" ]; then
     update-alternatives --remove default.plymouth "$DEST/$THEME.plymouth" || true
     update-alternatives --auto default.plymouth || true
     rm -rf "$DEST"
+    # Drop the vc4 line we added, leaving any pre-existing entries alone.
+    if [ -f /etc/initramfs-tools/modules ]; then
+        sed -i '/^# Arcade cabinet: the Pi/,+2d' /etc/initramfs-tools/modules
+    fi
     echo "   default theme is now: $(readlink -f "$ALT_LINK")"
     echo
     echo "== Rebuilding the initramfs =="
@@ -85,6 +89,29 @@ update-alternatives --install "$ALT_LINK" default.plymouth \
     "$DEST/$THEME.plymouth" "$PRIORITY"
 update-alternatives --set default.plymouth "$DEST/$THEME.plymouth"
 echo "   default.plymouth -> $(readlink -f "$ALT_LINK")"
+echo
+
+echo "== Ensuring the display driver is in the initramfs =="
+# Plymouth needs a KMS device to draw on. On this Pi the HDMI output is driven
+# by vc4, and Ubuntu's default initramfs does NOT include it despite
+# MODULES=most -- so plymouthd starts several seconds before any display exists,
+# silently falls back to the framebuffer renderer, and draws nothing. The
+# symptoms are a flickering screen, visible boot text, and no splash.
+#
+# Listing vc4 here pulls its dependencies (drm_kms_helper and friends) in too.
+MODFILE=/etc/initramfs-tools/modules
+touch "$MODFILE"
+if grep -qE '^\s*vc4\s*$' "$MODFILE"; then
+    echo "   vc4 already listed in $MODFILE"
+else
+    cat >> "$MODFILE" <<'EOF'
+
+# Arcade cabinet: the Pi's HDMI driver, needed in the initramfs so the boot
+# splash has a display to render on before switch-root.
+vc4
+EOF
+    echo "   added vc4 to $MODFILE"
+fi
 echo
 
 echo "== Rebuilding the initramfs =="
@@ -119,6 +146,15 @@ if lsinitramfs "$BOOT_INITRD" 2>/dev/null | grep -q "themes/$THEME/splash.png"; 
     echo "   [ok]   the splash image is inside $BOOT_INITRD"
 else
     echo "   [FAIL] the splash image is NOT in $BOOT_INITRD"
+    ok=false
+fi
+
+# Without this the theme is present but never drawn -- the failure mode that
+# looks like flickering and boot text rather than an obvious error.
+if lsinitramfs "$BOOT_INITRD" 2>/dev/null | grep -q '/vc4\.ko'; then
+    echo "   [ok]   the vc4 display driver is in the initramfs"
+else
+    echo "   [FAIL] vc4 is NOT in the initramfs -- Plymouth will have no screen"
     ok=false
 fi
 echo
