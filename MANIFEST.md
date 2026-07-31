@@ -37,6 +37,14 @@ attractplus (not from dpkg)
 tailscale (not from dpkg)
 ```
 
+## Nightly backup job (paul's user crontab, not systemd)
+```
+# Nightly snapshot of the arcade cabinet's configuration into ~/cabinet-config.
+# Runs as paul -- no sudo needed. Log: ~/cabinet-backup.log
+PATH=/usr/local/bin:/usr/bin:/bin
+17 4 * * * bash /home/paul/cabinet-backup.sh >/dev/null 2>&1
+```
+
 ## Restoring
 
 Files here mirror their absolute paths under `files/`. To restore:
@@ -54,4 +62,16 @@ ROMs are not in this repo. Drop them in `~/roms`, then:
 attractplus --build-romlist mame -o mame   # the -o matters
 python3 ~/get-artwork.py
 python3 ~/mk-controls.py mk mk2            # per-game input maps
+```
+
+The backup deploy key is not in here. On a fresh card, regenerate it
+and re-add it to the repo as a write-enabled deploy key:
+
+```
+ssh-keygen -t ed25519 -N '' -C arcade-cabinet-deploy \
+    -f ~/.ssh/id_cabinet_deploy
+ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts   # verify the
+    # fingerprint against docs.github.com before trusting it
+bash ~/github-remote.sh <owner>/<repo>
+crontab -e    # restore the 04:17 line shown above
 ```

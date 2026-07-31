@@ -41,6 +41,10 @@ FILES=(
     /home/paul/ssh-keepalive.sh
     /home/paul/cabinet-backup.sh
     /home/paul/tailscale-install.sh
+    /home/paul/github-remote.sh
+    # ssh client config only -- the deploy key itself is deliberately NOT here.
+    # A private key in a backup is a private key in every copy of the backup.
+    /home/paul/.ssh/config
     /etc/systemd/system/arcade.service
     /etc/ssh/sshd_config.d/10-keepalive.conf
 )
@@ -140,6 +144,11 @@ echo "-- writing manifest"
     done
     echo '```'
     echo
+    echo '## Nightly backup job (paul'"'"'s user crontab, not systemd)'
+    echo '```'
+    crontab -l 2>/dev/null || echo '(no crontab)'
+    echo '```'
+    echo
     echo '## Restoring'
     echo
     echo 'Files here mirror their absolute paths under `files/`. To restore:'
@@ -157,6 +166,18 @@ echo "-- writing manifest"
     echo 'attractplus --build-romlist mame -o mame   # the -o matters'
     echo 'python3 ~/get-artwork.py'
     echo 'python3 ~/mk-controls.py mk mk2            # per-game input maps'
+    echo '```'
+    echo
+    echo 'The backup deploy key is not in here. On a fresh card, regenerate it'
+    echo 'and re-add it to the repo as a write-enabled deploy key:'
+    echo
+    echo '```'
+    echo "ssh-keygen -t ed25519 -N '' -C arcade-cabinet-deploy \\"
+    echo '    -f ~/.ssh/id_cabinet_deploy'
+    echo 'ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts   # verify the'
+    echo '    # fingerprint against docs.github.com before trusting it'
+    echo 'bash ~/github-remote.sh <owner>/<repo>'
+    echo 'crontab -e    # restore the 04:17 line shown above'
     echo '```'
 } > "$REPO/MANIFEST.md"
 
