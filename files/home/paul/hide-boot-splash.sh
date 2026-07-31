@@ -92,12 +92,17 @@ rewrite_cmdline() {
             loglevel=*)          continue ;;           # re-added below
             vt.global_cursor_default=*) continue ;;
             logo.nologo)         continue ;;
+            systemd.show_status=*) continue ;;
         esac
         NEW="${NEW}${NEW:+ }${word}"
     done
     # quiet is usually already present; only add what is missing.
     case " $NEW " in *" quiet "*) ;; *) NEW="$NEW quiet" ;; esac
     NEW="$NEW loglevel=3 vt.global_cursor_default=0 logo.nologo"
+    # `quiet` only silences the KERNEL. systemd prints its own "[ OK ] Started"
+    # lines independently, and prints them on the way down as well -- which is
+    # why messages appear at shutdown, when no boot splash is involved at all.
+    NEW="$NEW systemd.show_status=false"
     # Plymouth only runs when `splash` is on the command line, so a themed boot
     # needs it back. Stripping and re-adding rather than skipping the strip
     # keeps the result identical no matter how many times this runs.
