@@ -54,7 +54,8 @@ if [ "${1:-}" = "--revert" ]; then
     update-alternatives --remove default.plymouth "$DEST/$THEME.plymouth" || true
     update-alternatives --auto default.plymouth || true
     rm -rf "$DEST"
-    # Drop the vc4 line we added, leaving any pre-existing entries alone.
+    rm -f /etc/dracut.conf.d/20-arcade-splash.conf
+    # Drop the initramfs-tools line too, in case an earlier version added one.
     if [ -f /etc/initramfs-tools/modules ]; then
         sed -i '/^# Arcade cabinet: the Pi/,+2d' /etc/initramfs-tools/modules
     fi
@@ -76,6 +77,15 @@ for f in "$SRC/$THEME.plymouth" "$SRC/$THEME.script" "$SPLASH"; do
     fi
 done
 
+# Quiet boot comes FIRST, deliberately. It is the part that matters most and the
+# part that always works; the splash is cosmetic and depends on Plymouth finding
+# a display. Doing it the other way round meant a failed splash check aborted the
+# script before the quiet settings were ever applied -- losing the thing that was
+# actually wanted in order to protect the thing that was optional.
+echo "== Applying quiet-boot settings (keeping splash so the theme can show) =="
+bash /home/paul/hide-boot-splash.sh --keep-splash
+echo
+
 echo "== Installing theme to $DEST =="
 install -d -m 755 "$DEST"
 install -m 644 "$SRC/$THEME.plymouth" "$DEST/"
@@ -93,24 +103,27 @@ echo
 
 echo "== Ensuring the display driver is in the initramfs =="
 # Plymouth needs a KMS device to draw on. On this Pi the HDMI output is driven
-# by vc4, and Ubuntu's default initramfs does NOT include it despite
-# MODULES=most -- so plymouthd starts several seconds before any display exists,
-# silently falls back to the framebuffer renderer, and draws nothing. The
-# symptoms are a flickering screen, visible boot text, and no splash.
+# by vc4, which is NOT in the default initramfs -- so plymouthd starts several
+# seconds before any display exists, falls back to a renderer that cannot draw,
+# and you get a flickering screen with boot text and no splash.
 #
-# Listing vc4 here pulls its dependencies (drm_kms_helper and friends) in too.
-MODFILE=/etc/initramfs-tools/modules
-touch "$MODFILE"
-if grep -qE '^\s*vc4\s*$' "$MODFILE"; then
-    echo "   vc4 already listed in $MODFILE"
-else
-    cat >> "$MODFILE" <<'EOF'
-
-# Arcade cabinet: the Pi's HDMI driver, needed in the initramfs so the boot
-# splash has a display to render on before switch-root.
-vc4
+# Ubuntu 26.04 builds initramfs images with DRACUT, not initramfs-tools;
+# /usr/sbin/update-initramfs is only a compatibility shim. That means
+# /etc/initramfs-tools/modules is dead config here and is silently ignored --
+# drivers have to be requested through /etc/dracut.conf.d instead.
+DRACUT_CONF=/etc/dracut.conf.d/20-arcade-splash.conf
+install -d -m 755 /etc/dracut.conf.d
+cat > "$DRACUT_CONF" <<'EOF'
+# Arcade cabinet: the Pi's HDMI driver, forced into the initramfs so the boot
+# splash has a display to render on before switch-root. The surrounding spaces
+# are required -- dracut appends this verbatim to its driver list.
+add_drivers+=" vc4 "
 EOF
-    echo "   added vc4 to $MODFILE"
+echo "   wrote $DRACUT_CONF"
+# Remove the initramfs-tools entry if an earlier version of this script added
+# one; it does nothing here and is just misleading.
+if [ -f /etc/initramfs-tools/modules ]; then
+    sed -i '/^# Arcade cabinet: the Pi/,+2d' /etc/initramfs-tools/modules
 fi
 echo
 
@@ -160,13 +173,20 @@ fi
 echo
 
 if [ "$ok" != true ]; then
-    echo "Something did not take. Do NOT assume the splash will appear;" >&2
-    echo "re-run this script or check the messages above." >&2
+    cat >&2 <<'WARN'
+The SPLASH did not fully take -- do not expect artwork at boot.
+
+The quiet-boot settings were applied before this point and are fine,
+so the boot will still be silent. If you would rather stop chasing the
+splash and just have a black screen, remove Plymouth from the picture
+entirely:
+
+    sudo bash ~/install-splash-theme.sh --revert
+    sudo bash ~/hide-boot-splash.sh          # note: no --keep-splash
+    sudo reboot
+WARN
     exit 1
 fi
-
-echo "== Applying quiet-boot settings (keeping splash so the theme shows) =="
-bash /home/paul/hide-boot-splash.sh --keep-splash
 
 cat <<'EOF'
 
