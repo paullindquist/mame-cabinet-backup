@@ -33,9 +33,20 @@ ALT_LINK=/usr/share/plymouth/themes/default.plymouth
 # in auto mode; we also --set explicitly, which pins it regardless.
 PRIORITY=200
 
-# The initramfs the Pi actually boots is the copy inside the A/B directory, not
-# the one update-initramfs writes. flash-kernel syncs them; we verify it did.
-BOOT_INITRD=/boot/firmware/current/initrd.img
+# The initramfs the Pi actually boots is the copy inside the A/B boot set, not
+# the one update-initramfs writes -- flash-kernel copies it across. And it does
+# NOT overwrite current/: it stages a whole new set in new/, which the bootloader
+# tries at the next reboot ("will boot twice") and only then promotes over
+# current/. So the file to verify is new/ when it exists, current/ otherwise.
+# Checking current/ right after an install always fails, and that failure means
+# nothing.
+if [ -f /boot/firmware/new/initrd.img ]; then
+    BOOT_INITRD=/boot/firmware/new/initrd.img
+    BOOT_SLOT="new (staged; promoted on next boot)"
+else
+    BOOT_INITRD=/boot/firmware/current/initrd.img
+    BOOT_SLOT="current"
+fi
 
 # ---------------------------------------------------------------- revert ----
 if [ "${1:-}" = "--revert" ]; then
@@ -79,14 +90,22 @@ echo
 echo "== Rebuilding the initramfs =="
 # Plymouth runs from the initramfs, so a theme that exists only in /usr/share is
 # never actually seen at boot. This is the step that matters.
-BEFORE=$(md5sum "$BOOT_INITRD" 2>/dev/null | cut -d' ' -f1 || echo none)
 update-initramfs -u
-AFTER=$(md5sum "$BOOT_INITRD" 2>/dev/null | cut -d' ' -f1 || echo none)
 echo
 
+# Re-resolve the slot AFTER the rebuild: flash-kernel creates new/ as part of
+# this step, so a value computed beforehand can point at the wrong file.
+if [ -f /boot/firmware/new/initrd.img ]; then
+    BOOT_INITRD=/boot/firmware/new/initrd.img
+    BOOT_SLOT="new (staged; promoted on next boot)"
+else
+    BOOT_INITRD=/boot/firmware/current/initrd.img
+    BOOT_SLOT="current"
+fi
+
 echo "== Verifying =="
-# Three things have to be true, and none of them is implied by the commands
-# above having exited zero.
+echo "   boot slot: $BOOT_SLOT"
+# Neither of these is implied by the commands above having exited zero.
 ok=true
 
 if [ "$(readlink -f "$ALT_LINK")" = "$DEST/$THEME.plymouth" ]; then
@@ -97,16 +116,9 @@ else
 fi
 
 if lsinitramfs "$BOOT_INITRD" 2>/dev/null | grep -q "themes/$THEME/splash.png"; then
-    echo "   [ok]   the splash image is inside the booted initramfs"
+    echo "   [ok]   the splash image is inside $BOOT_INITRD"
 else
     echo "   [FAIL] the splash image is NOT in $BOOT_INITRD"
-    ok=false
-fi
-
-if [ "$BEFORE" != "$AFTER" ]; then
-    echo "   [ok]   flash-kernel refreshed $BOOT_INITRD"
-else
-    echo "   [WARN] $BOOT_INITRD is unchanged -- flash-kernel may not have run"
     ok=false
 fi
 echo

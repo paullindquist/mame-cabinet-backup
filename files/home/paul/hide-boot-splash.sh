@@ -31,22 +31,33 @@ fi
 
 # This box uses the Pi A/B tryboot layout, so the ACTIVE kernel command line is
 # inside current/, not the top level. config.txt is read from the top level.
-CMDLINE=/boot/firmware/current/cmdline.txt
 CONFIG=/boot/firmware/config.txt
 STAMP=.pre-silentboot
 
 KEEP_SPLASH=false
 [ "${1:-}" = "--keep-splash" ] && KEEP_SPLASH=true
 
-if [ ! -f "$CMDLINE" ]; then
-    echo "Expected $CMDLINE and it is not there. Stopping rather than" >&2
+# This Pi boots with the A/B tryboot scheme, which keeps a whole boot set per
+# slot -- kernel, initramfs AND its own cmdline.txt. After flash-kernel stages
+# an update, `new/` is what the bootloader tries next and is then promoted over
+# `current/`. Editing only `current/` therefore gets silently thrown away at the
+# next promotion, so every slot that exists must be edited.
+CMDLINES=()
+for f in /boot/firmware/cmdline.txt \
+         /boot/firmware/current/cmdline.txt \
+         /boot/firmware/new/cmdline.txt; do
+    [ -f "$f" ] && CMDLINES+=("$f")
+done
+
+if [ ${#CMDLINES[@]} -eq 0 ]; then
+    echo "Found no cmdline.txt in /boot/firmware. Stopping rather than" >&2
     echo "guessing -- getting this file wrong stops the Pi booting." >&2
     exit 1
 fi
 
 # ---------------------------------------------------------------- revert ----
 if [ "${1:-}" = "--revert" ]; then
-    for f in "$CMDLINE" "$CONFIG"; do
+    for f in "${CMDLINES[@]}" "$CONFIG"; do
         if [ -f "${f}${STAMP}" ]; then
             cp -a "${f}${STAMP}" "$f"
             echo "restored $f"
@@ -61,49 +72,55 @@ if [ "${1:-}" = "--revert" ]; then
 fi
 
 # ------------------------------------------------------------- back it up ---
-for f in "$CMDLINE" "$CONFIG"; do
+for f in "${CMDLINES[@]}" "$CONFIG"; do
     [ -f "${f}${STAMP}" ] || cp -a "$f" "${f}${STAMP}"
 done
 echo "== Backed up (restore any time with --revert) =="
-echo "   ${CMDLINE}${STAMP}"
-echo "   ${CONFIG}${STAMP}"
+for f in "${CMDLINES[@]}" "$CONFIG"; do echo "   ${f}${STAMP}"; done
 echo
 
 # ---------------------------------------------------------------- cmdline ---
 # Read as one line, edit as words. Rebuilding word-by-word keeps this idempotent
 # -- running it twice cannot duplicate an argument or corrupt root=.
-OLD=$(tr -d '\n' < "$CMDLINE")
-NEW=""
-for word in $OLD; do
-    case "$word" in
-        splash)              continue ;;              # re-added below if kept
-        console=tty1)        word=console=tty3 ;;      # keep boot text off tty1
-        loglevel=*)          continue ;;               # re-added below
-        vt.global_cursor_default=*) continue ;;
-        logo.nologo)         continue ;;
+rewrite_cmdline() {
+    local file="$1" OLD NEW="" word
+    OLD=$(tr -d '\n' < "$file")
+    for word in $OLD; do
+        case "$word" in
+            splash)              continue ;;          # re-added below if kept
+            console=tty1)        word=console=tty3 ;;  # keep boot text off tty1
+            loglevel=*)          continue ;;           # re-added below
+            vt.global_cursor_default=*) continue ;;
+            logo.nologo)         continue ;;
+        esac
+        NEW="${NEW}${NEW:+ }${word}"
+    done
+    # quiet is usually already present; only add what is missing.
+    case " $NEW " in *" quiet "*) ;; *) NEW="$NEW quiet" ;; esac
+    NEW="$NEW loglevel=3 vt.global_cursor_default=0 logo.nologo"
+    # Plymouth only runs when `splash` is on the command line, so a themed boot
+    # needs it back. Stripping and re-adding rather than skipping the strip
+    # keeps the result identical no matter how many times this runs.
+    if [ "$KEEP_SPLASH" = true ]; then
+        NEW="$NEW splash"
+    fi
+
+    # A cmdline missing root= is an unbootable machine. Refuse to write it.
+    case " $NEW " in
+        *" root="*) ;;
+        *) echo "Refusing to write $file: root= vanished." >&2
+           return 1 ;;
     esac
-    NEW="${NEW}${NEW:+ }${word}"
+
+    printf '%s\n' "$NEW" > "$file"
+    echo "   $file"
+    echo "     $NEW"
+}
+
+echo "== Rewriting the kernel command line in every boot slot =="
+for f in "${CMDLINES[@]}"; do
+    rewrite_cmdline "$f" || exit 1
 done
-# quiet is usually already present; only add what is missing.
-case " $NEW " in *" quiet "*) ;; *) NEW="$NEW quiet" ;; esac
-NEW="$NEW loglevel=3 vt.global_cursor_default=0 logo.nologo"
-# Plymouth only runs when `splash` is on the command line, so a themed boot
-# needs it back. Stripping and re-adding rather than skipping the strip keeps
-# the result identical no matter how many times this runs.
-if [ "$KEEP_SPLASH" = true ]; then
-    NEW="$NEW splash"
-fi
-
-# A cmdline missing root= is an unbootable machine. Refuse rather than write it.
-case " $NEW " in
-    *" root="*) ;;
-    *) echo "Refusing to write: root= vanished from the command line." >&2
-       exit 1 ;;
-esac
-
-printf '%s\n' "$NEW" > "$CMDLINE"
-echo "== New kernel command line =="
-echo "   $NEW"
 echo
 
 # ----------------------------------------------------------------- config ---
