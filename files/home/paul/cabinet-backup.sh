@@ -45,8 +45,13 @@ FILES=(
     # ssh client config only -- the deploy key itself is deliberately NOT here.
     # A private key in a backup is a private key in every copy of the backup.
     /home/paul/.ssh/config
+    /home/paul/hide-boot-splash.sh
     /etc/systemd/system/arcade.service
     /etc/ssh/sshd_config.d/10-keepalive.conf
+    # Boot config. This Pi uses the A/B tryboot layout, so the ACTIVE kernel
+    # command line is the one inside current/, not the top level.
+    /boot/firmware/current/cmdline.txt
+    /boot/firmware/config.txt
 )
 
 DIRS=(
