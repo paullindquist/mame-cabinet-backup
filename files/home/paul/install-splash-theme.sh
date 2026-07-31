@@ -11,6 +11,10 @@
 # fully silent boot are mutually exclusive. Run hide-boot-splash.sh with no
 # arguments instead if you would rather have a plain black screen.
 #
+# Note on mechanism: Ubuntu 26.04 no longer ships plymouth-set-default-theme.
+# The default theme is now an update-alternatives link, and the initramfs is
+# copied into the A/B boot directory by flash-kernel afterwards.
+#
 # Run with:  sudo bash ~/install-splash-theme.sh
 #            sudo bash ~/install-splash-theme.sh --revert
 set -euo pipefail
@@ -24,17 +28,25 @@ THEME=mkcabinet
 SRC=/home/paul/arcade/plymouth-theme
 SPLASH=/home/paul/arcade/splash.png
 DEST=/usr/share/plymouth/themes/$THEME
+ALT_LINK=/usr/share/plymouth/themes/default.plymouth
+# Ubuntu's own bgrt theme registers at priority 110, so anything above that wins
+# in auto mode; we also --set explicitly, which pins it regardless.
+PRIORITY=200
+
+# The initramfs the Pi actually boots is the copy inside the A/B directory, not
+# the one update-initramfs writes. flash-kernel syncs them; we verify it did.
+BOOT_INITRD=/boot/firmware/current/initrd.img
 
 # ---------------------------------------------------------------- revert ----
 if [ "${1:-}" = "--revert" ]; then
-    echo "== Restoring Ubuntu's default theme =="
-    # bgrt is Ubuntu's stock choice; fall back to spinner if it is gone.
-    if [ -f /usr/share/plymouth/themes/bgrt/bgrt.plymouth ]; then
-        plymouth-set-default-theme -R bgrt
-    else
-        plymouth-set-default-theme -R spinner
-    fi
+    echo "== Removing the theme from update-alternatives =="
+    update-alternatives --remove default.plymouth "$DEST/$THEME.plymouth" || true
+    update-alternatives --auto default.plymouth || true
     rm -rf "$DEST"
+    echo "   default theme is now: $(readlink -f "$ALT_LINK")"
+    echo
+    echo "== Rebuilding the initramfs =="
+    update-initramfs -u
     echo
     echo "Reverted. The quiet-boot settings are untouched -- undo those with:"
     echo "    sudo bash ~/hide-boot-splash.sh --revert"
@@ -57,13 +69,53 @@ install -m 644 "$SPLASH"              "$DEST/splash.png"
 ls -l "$DEST"
 echo
 
-echo "== Setting it as the default and rebuilding the initramfs =="
-# -R is the important part: Plymouth runs from the initramfs, so a theme that is
-# only in /usr/share is never actually seen at boot.
-plymouth-set-default-theme -R "$THEME"
+echo "== Making it the default theme =="
+update-alternatives --install "$ALT_LINK" default.plymouth \
+    "$DEST/$THEME.plymouth" "$PRIORITY"
+update-alternatives --set default.plymouth "$DEST/$THEME.plymouth"
+echo "   default.plymouth -> $(readlink -f "$ALT_LINK")"
 echo
-echo "   active theme is now: $(plymouth-set-default-theme)"
+
+echo "== Rebuilding the initramfs =="
+# Plymouth runs from the initramfs, so a theme that exists only in /usr/share is
+# never actually seen at boot. This is the step that matters.
+BEFORE=$(md5sum "$BOOT_INITRD" 2>/dev/null | cut -d' ' -f1 || echo none)
+update-initramfs -u
+AFTER=$(md5sum "$BOOT_INITRD" 2>/dev/null | cut -d' ' -f1 || echo none)
 echo
+
+echo "== Verifying =="
+# Three things have to be true, and none of them is implied by the commands
+# above having exited zero.
+ok=true
+
+if [ "$(readlink -f "$ALT_LINK")" = "$DEST/$THEME.plymouth" ]; then
+    echo "   [ok]   default.plymouth points at the cabinet theme"
+else
+    echo "   [FAIL] default.plymouth points at $(readlink -f "$ALT_LINK")"
+    ok=false
+fi
+
+if lsinitramfs "$BOOT_INITRD" 2>/dev/null | grep -q "themes/$THEME/splash.png"; then
+    echo "   [ok]   the splash image is inside the booted initramfs"
+else
+    echo "   [FAIL] the splash image is NOT in $BOOT_INITRD"
+    ok=false
+fi
+
+if [ "$BEFORE" != "$AFTER" ]; then
+    echo "   [ok]   flash-kernel refreshed $BOOT_INITRD"
+else
+    echo "   [WARN] $BOOT_INITRD is unchanged -- flash-kernel may not have run"
+    ok=false
+fi
+echo
+
+if [ "$ok" != true ]; then
+    echo "Something did not take. Do NOT assume the splash will appear;" >&2
+    echo "re-run this script or check the messages above." >&2
+    exit 1
+fi
 
 echo "== Applying quiet-boot settings (keeping splash so the theme shows) =="
 bash /home/paul/hide-boot-splash.sh --keep-splash
