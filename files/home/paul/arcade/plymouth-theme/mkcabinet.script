@@ -1,0 +1,39 @@
+# Boot splash for the arcade cabinet.
+#
+# Deliberately static: no spinner, no progress bar, no "Ubuntu" wordmark. A real
+# arcade machine shows its title screen and then the game, and the boot is short
+# enough now that an animation would barely register anyway.
+
+Window.SetBackgroundTopColor(0.0, 0.0, 0.0);
+Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
+
+splash_image  = Image("splash.png");
+splash_sprite = Sprite(splash_image);
+
+# Centre it rather than assuming it matches the mode. The image is rendered to
+# the cabinet's 1280x960, but if the monitor is ever swapped this still places
+# it sensibly instead of pinning it to a corner.
+splash_sprite.SetX((Window.GetWidth()  - splash_image.GetWidth())  / 2);
+splash_sprite.SetY((Window.GetHeight() - splash_image.GetHeight()) / 2);
+splash_sprite.SetZ(0);
+
+# Plymouth invokes these on various events. Defining them as no-ops keeps
+# status text, fsck progress and the like from being drawn over the artwork.
+fun refresh_callback () { }
+Plymouth.SetRefreshFunction(refresh_callback);
+
+fun display_normal_callback () { }
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+fun message_callback (text) { }
+Plymouth.SetMessageFunction(message_callback);
+
+fun update_status_callback (status) { }
+Plymouth.SetUpdateStatusFunction(update_status_callback);
+
+# On the way out, fade the artwork rather than cutting to black, so the handover
+# to the frontend does not flash.
+fun quit_callback () {
+    splash_sprite.SetOpacity(0);
+}
+Plymouth.SetQuitFunction(quit_callback);

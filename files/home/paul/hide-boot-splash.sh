@@ -14,8 +14,14 @@
 # It also stops NetworkManager-wait-online, which blocks boot for ~7 seconds
 # waiting for wifi that nothing needs before the frontend starts.
 #
-# Run with:  sudo bash ~/hide-boot-splash.sh
+# Run with:  sudo bash ~/hide-boot-splash.sh                # black screen
+#            sudo bash ~/hide-boot-splash.sh --keep-splash  # show the theme
 #            sudo bash ~/hide-boot-splash.sh --revert
+#
+# --keep-splash leaves the `splash` argument in place so Plymouth still runs and
+# can draw the Mortal Kombat theme. Everything else -- firmware rainbow, kernel
+# text on tty1, boot delay -- is suppressed either way. Without it, Plymouth
+# never starts and any installed theme is simply never seen.
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -28,6 +34,9 @@ fi
 CMDLINE=/boot/firmware/current/cmdline.txt
 CONFIG=/boot/firmware/config.txt
 STAMP=.pre-silentboot
+
+KEEP_SPLASH=false
+[ "${1:-}" = "--keep-splash" ] && KEEP_SPLASH=true
 
 if [ ! -f "$CMDLINE" ]; then
     echo "Expected $CMDLINE and it is not there. Stopping rather than" >&2
@@ -67,7 +76,7 @@ OLD=$(tr -d '\n' < "$CMDLINE")
 NEW=""
 for word in $OLD; do
     case "$word" in
-        splash)              continue ;;              # the Ubuntu logo
+        splash)              continue ;;              # re-added below if kept
         console=tty1)        word=console=tty3 ;;      # keep boot text off tty1
         loglevel=*)          continue ;;               # re-added below
         vt.global_cursor_default=*) continue ;;
@@ -78,6 +87,12 @@ done
 # quiet is usually already present; only add what is missing.
 case " $NEW " in *" quiet "*) ;; *) NEW="$NEW quiet" ;; esac
 NEW="$NEW loglevel=3 vt.global_cursor_default=0 logo.nologo"
+# Plymouth only runs when `splash` is on the command line, so a themed boot
+# needs it back. Stripping and re-adding rather than skipping the strip keeps
+# the result identical no matter how many times this runs.
+if [ "$KEEP_SPLASH" = true ]; then
+    NEW="$NEW splash"
+fi
 
 # A cmdline missing root= is an unbootable machine. Refuse rather than write it.
 case " $NEW " in

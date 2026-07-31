@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Arcade Cabinet
+Description=Static title-screen splash for the Mortal Kombat cabinet
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/mkcabinet
+ScriptFile=/usr/share/plymouth/themes/mkcabinet/mkcabinet.script

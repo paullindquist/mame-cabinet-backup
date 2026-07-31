@@ -46,6 +46,9 @@ FILES=(
     # A private key in a backup is a private key in every copy of the backup.
     /home/paul/.ssh/config
     /home/paul/hide-boot-splash.sh
+    /home/paul/install-splash-theme.sh
+    /home/paul/make-splash.py
+    /home/paul/arcade/splash.png
     /etc/systemd/system/arcade.service
     /etc/ssh/sshd_config.d/10-keepalive.conf
     # Boot config. This Pi uses the A/B tryboot layout, so the ACTIVE kernel
@@ -60,6 +63,7 @@ DIRS=(
     /home/paul/.attract/emulators
     /home/paul/.attract/romlists
     /home/paul/arcade/artwork            # custom scanline overlays
+    /home/paul/arcade/plymouth-theme     # boot splash theme
 )
 
 mkdir -p "$REPO"
