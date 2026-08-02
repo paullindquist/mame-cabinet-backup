@@ -50,6 +50,7 @@ FILES=(
     /home/paul/install-splash-theme.sh
     /home/paul/fix-panel-powerkey.sh
     /home/paul/mount-drive.sh
+    /home/paul/fix-usb-drive-resets.sh
     /home/paul/grant-sudo.sh
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png
