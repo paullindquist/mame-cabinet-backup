@@ -134,9 +134,31 @@ if [ "$ok" != true ]; then
     exit 1
 fi
 
-# Only now, with the mount confirmed working, arm the trap protection. Doing this
-# earlier would make a failed mount harder to clean up.
-echo "   [ok]   arming the empty-mountpoint guard"
+# Only now, with the mount confirmed working, arm the guard. Doing it earlier
+# would make a failed mount harder to clean up.
+#
+# The flag has to go on the directory itself, which means unmounting briefly --
+# the drive does NOT need to be unplugged. Mounting over an immutable directory
+# works normally afterwards; the flag only bites when nothing is mounted there.
+echo "== Arming the empty-mountpoint guard =="
+umount "$MNT"
+chattr +i "$MNT"
+lsattr -d "$MNT" | sed 's/^/   /'
+
+# Prove the guard actually guards, rather than assuming the flag did something.
+# Tested as root deliberately: the immutable flag stops root too, and root is
+# what a careless script most often runs as.
+if sh -c "echo x > $MNT/.guard-test" 2>/dev/null; then
+    echo "   [FAIL] a write to the unmounted path SUCCEEDED -- guard is not working"
+    rm -f "$MNT/.guard-test"
+    chattr -i "$MNT"
+    mount "$MNT"
+    exit 1
+fi
+echo "   [ok]   writes to $MNT are refused while the drive is unmounted"
+
+mount "$MNT"
+findmnt -n -o SOURCE,TARGET "$MNT" | sed 's/^/   /'
 echo
 
 cat <<EOF
@@ -147,15 +169,9 @@ so it survives the drive moving between sda and sdb.
 If the drive is ever absent, the cabinet still boots -- 'nofail'
 and a 10s timeout, rather than the 90s default.
 
-ONE THING LEFT, and it needs the drive unplugged to apply:
-
-    sudo umount $MNT
-    sudo chattr +i $MNT
-
-That makes the bare directory immutable while nothing is mounted
-on it, so writing to $MNT with the drive absent fails loudly
-instead of quietly filling the SD card. Re-mounting over it still
-works normally.
+With the drive unmounted, $MNT is immutable, so writing there by
+mistake fails immediately instead of quietly filling the SD card.
+That refusal applies to root as well as to paul.
 
 To undo everything:  sudo bash ~/mount-drive.sh --revert
 ================================================================
