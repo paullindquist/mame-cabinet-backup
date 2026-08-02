@@ -1,0 +1,5 @@
+LABEL=writable	/	ext4	discard	0	1
+LABEL=system-boot	/boot/firmware	vfat	defaults	0	1
+/swapfile	none	swap	sw	0	0
+# arcade cabinet: external Seagate
+UUID=F2E2212BE220F58F /mnt/usbdrive ntfs-3g rw,nofail,uid=1000,gid=1000,umask=0022,windows_names,noatime,x-systemd.device-timeout=10 0 0

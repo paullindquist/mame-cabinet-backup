@@ -1,0 +1,16 @@
+# Arcade cabinet: the Ultimarc I-PAC 2 exposes an HID "System Control" interface
+# carrying Power/Sleep/Wake. Without this, systemd-logind treats the panel as a
+# power button, and a stray press powers the cabinet off mid-game. That is not
+# hypothetical -- it happened on 2026-08-02, twelve seconds after the panel was
+# plugged in.
+#
+# 65- matters: this must run after 60-input-id.rules sets ID_INPUT_KEY and before
+# 70-power-switch.rules reads it. Removing the tag afterwards does NOT work --
+# udev will not un-set a tag.
+#
+# Two rules, not one: ATTRS{idVendor} is on the USB device and ATTRS{name} is on
+# the input device, and all ATTRS{} in a single rule must match the same parent.
+ACTION=="remove", GOTO="arcade_panel_end"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="d209", ATTRS{idProduct}=="0420", ENV{ARCADE_PANEL}="1"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ARCADE_PANEL}=="1", ATTRS{name}=="Ultimarc I-PAC 2 System Control", ENV{ID_INPUT_KEY}="", ENV{ID_INPUT_SWITCH}=""
+LABEL="arcade_panel_end"

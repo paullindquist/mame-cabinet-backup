@@ -48,10 +48,19 @@ FILES=(
     /home/paul/hide-boot-splash.sh
     /home/paul/static-ip.sh
     /home/paul/install-splash-theme.sh
+    /home/paul/fix-panel-powerkey.sh
+    /home/paul/mount-drive.sh
+    /home/paul/grant-sudo.sh
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png
     /etc/systemd/system/arcade.service
     /etc/ssh/sshd_config.d/10-keepalive.conf
+    # Stops the control panel from acting as a power switch -- without this the
+    # cabinet powers off on a stray button press.
+    /etc/udev/rules.d/65-arcade-panel-no-powerkey.rules
+    /etc/systemd/journald.conf.d/90-arcade-cap.conf
+    # The external drive mount. Keyed on UUID so it survives sda/sdb renumbering.
+    /etc/fstab
     # Boot config. This Pi uses the A/B tryboot layout, so the ACTIVE kernel
     # command line is the one inside current/, not the top level.
     /boot/firmware/current/cmdline.txt
