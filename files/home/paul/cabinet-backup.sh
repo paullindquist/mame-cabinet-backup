@@ -32,6 +32,7 @@ FILES=(
     /home/paul/.mame/mame.ini
     /home/paul/.mame/ui.ini
     /home/paul/.mame/plugin.ini
+    /home/paul/.mame/swimmer.ini         # per-game: integer vertical scaling
     /home/paul/arcade-boot.sh
     /home/paul/arcade-deps.sh
     /home/paul/mk-controls.py
@@ -52,6 +53,8 @@ FILES=(
     /home/paul/mount-drive.sh
     /home/paul/fix-usb-drive-resets.sh
     /home/paul/grant-sudo.sh
+    /home/paul/sd-migrate.sh
+    /home/paul/fix-audio.sh
     /home/paul/find-duplicates.py
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png
@@ -72,6 +75,7 @@ FILES=(
 DIRS=(
     /home/paul/.mame/cfg                 # per-game input maps -- the hard-won part
     /home/paul/.attract/config
+    /home/paul/.config/wireplumber/wireplumber.conf.d   # HDMI volume + no-suspend
     /home/paul/.attract/emulators
     /home/paul/.attract/romlists
     /home/paul/arcade/artwork            # custom scanline overlays

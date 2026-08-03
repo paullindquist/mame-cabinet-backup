@@ -19,8 +19,11 @@ attractplus:Attract-Mode Plus v3.2.3 (Linux, SFML 3.0.1 +7z +Curl)
 
 ## ROM sets present
 ```
+cclimber.zip
+cclimbr2.zip
 mk.zip
 mk2.zip
+swimmer.zip
 ```
 
 ## Incomplete ROM sets (parked outside the rompath)
