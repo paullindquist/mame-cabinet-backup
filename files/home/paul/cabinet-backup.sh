@@ -79,6 +79,7 @@ DIRS=(
     /home/paul/.attract/emulators
     /home/paul/.attract/romlists
     /home/paul/arcade/artwork            # custom scanline overlays
+    /home/paul/arcade/shaders            # GLSL sharp-bilinear + scanline shader
     /home/paul/arcade/plymouth-theme     # boot splash theme
 )
 
