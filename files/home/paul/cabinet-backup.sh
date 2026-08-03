@@ -52,6 +52,7 @@ FILES=(
     /home/paul/mount-drive.sh
     /home/paul/fix-usb-drive-resets.sh
     /home/paul/grant-sudo.sh
+    /home/paul/find-duplicates.py
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png
     /etc/systemd/system/arcade.service
