@@ -32,7 +32,8 @@ FILES=(
     /home/paul/.mame/mame.ini
     /home/paul/.mame/ui.ini
     /home/paul/.mame/plugin.ini
-    /home/paul/.mame/swimmer.ini         # per-game: integer vertical scaling
+    /home/paul/.mame/swimmer.ini         # per-game: GLSL sharp-bilinear + scanlines
+    /home/paul/.mame/mspacman.ini        # per-game: same, rotated game
     /home/paul/arcade-boot.sh
     /home/paul/arcade-deps.sh
     /home/paul/mk-controls.py
@@ -55,6 +56,11 @@ FILES=(
     /home/paul/grant-sudo.sh
     /home/paul/sd-migrate.sh
     /home/paul/fix-audio.sh
+    /home/paul/fix-console-bleed.sh
+    /home/paul/test-splash.sh
+    /home/paul/debug-splash.sh
+    /home/paul/fix-splash.sh
+    /etc/systemd/system/arcade.service.d/10-console-vt.conf
     /home/paul/find-duplicates.py
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png

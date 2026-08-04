@@ -77,7 +77,18 @@ void main()
 	// pixels here, which is not a whole number, so a square wave lands
 	// differently against the pixel grid on every cycle -- some bands sit on
 	// one pixel and go crisp, others straddle two and split.
-	float wave = pow(0.5 - 0.5 * cos(texels.y * 6.2831853), SCAN_DUTY);
+	// Pick whichever texel axis runs DOWN THE SCREEN, so the bands always come
+	// out horizontal. For an upright game that is the texture's y axis; for a
+	// 90-degree rotated one like mspacman it is x. Derived from the screen-space
+	// derivative rather than hardcoded, so a single shader serves both and the
+	// result does not depend on how MAME chooses to orient the texture.
+	// Both derivatives are taken before the branch -- derivatives inside
+	// non-uniform control flow are undefined.
+	float dyx = abs(dFdy(texels.x));
+	float dyy = abs(dFdy(texels.y));
+	float phase = (dyx > dyy) ? texels.x : texels.y;
+
+	float wave = pow(0.5 - 0.5 * cos(phase * 6.2831853), SCAN_DUTY);
 
 	// Bloom compensation -- the important part on this game. A real CRT beam
 	// spreads as it gets brighter and fills its own gap, so scanlines are

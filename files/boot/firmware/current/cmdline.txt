@@ -1,1 +1,1 @@
-zswap.enabled=1 zswap.compressor=zstd multipath=off dwc_otg.lpm_enable=0 console=tty3 root=LABEL=writable rootfstype=ext4 panic=10 rootwait fixrtc quiet loglevel=3 vt.global_cursor_default=0 logo.nologo systemd.show_status=false splash usb-storage.quirks=0bc2:2320:u
+zswap.enabled=1 zswap.compressor=zstd multipath=off dwc_otg.lpm_enable=0 console=tty3 root=LABEL=writable rootfstype=ext4 panic=10 rootwait fixrtc quiet loglevel=3 vt.global_cursor_default=0 logo.nologo systemd.show_status=false splash usb-storage.quirks=0bc2:2320:u plymouth.ignore-serial-consoles

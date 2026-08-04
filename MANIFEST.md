@@ -23,6 +23,7 @@ cclimber.zip
 cclimbr2.zip
 mk.zip
 mk2.zip
+mspacman.zip
 swimmer.zip
 ```
 
