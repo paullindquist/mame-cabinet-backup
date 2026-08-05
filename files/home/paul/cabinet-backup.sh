@@ -63,6 +63,7 @@ FILES=(
     /home/paul/fix-splash.sh
     /etc/systemd/system/arcade.service.d/10-console-vt.conf
     /home/paul/find-duplicates.py
+    /home/paul/romlist-enrich.py
     /home/paul/make-splash.py
     /home/paul/arcade/splash.png
     /etc/systemd/system/arcade.service
