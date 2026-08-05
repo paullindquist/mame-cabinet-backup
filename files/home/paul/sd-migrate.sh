@@ -27,7 +27,29 @@ say() { echo -e "\n=== $* ==="; }
 ROOTDEV=$(findmnt -no SOURCE / | sed 's/p\?[0-9]*$//')
 [[ $TARGET == "$ROOTDEV"* ]] && die "$TARGET holds the running root filesystem — that is the card you are migrating AWAY from"
 [[ $TARGET == /dev/mmcblk0* ]] && die "$TARGET is the card currently running this system"
-[[ $TARGET == /dev/sda* ]] && die "$TARGET is the 500GB Seagate ROM drive"
+
+# NEVER identify a drive by its kernel name. USB devices are enumerated in
+# whatever order they answer on the bus, and the Seagate has already moved from
+# sda to sdc once — an earlier version of this script hardcoded "/dev/sda is the
+# ROM drive", which by then was pointing at the blank card instead. Ask what is
+# actually mounted, and ask fstab what the ROM drive's UUID is.
+while read -r part; do
+    [[ -n $part ]] || continue
+    # || true matters: findmnt exits non-zero when the device is NOT mounted,
+    # which is the normal case, and pipefail would abort the whole script.
+    mp=$(findmnt -rno TARGET -S "/dev/$part" 2>/dev/null | paste -sd, - || true)
+    [[ -n $mp ]] && die "/dev/$part on $TARGET is mounted at $mp — refusing"
+done < <(lsblk -lno NAME "$TARGET")
+
+# Catches the ROM drive even when it happens to be unmounted.
+ROM_UUID=$(awk '!/^[[:space:]]*#/ && $2=="/mnt/usbdrive" {print $1}' /etc/fstab | sed 's/^UUID=//')
+if [[ -n ${ROM_UUID:-} ]]; then
+    rompart=$(blkid -U "$ROM_UUID" 2>/dev/null || true)
+    if [[ -n $rompart ]]; then
+        romdisk="/dev/$(lsblk -no PKNAME "$rompart" | head -1)"
+        [[ $TARGET == "$romdisk" ]] && die "$TARGET is the ROM drive (UUID $ROM_UUID)"
+    fi
+fi
 
 # Use the kernel's own view rather than guessing from a trailing digit, which
 # would wrongly reject a legitimately mmcblk-named target.
@@ -44,12 +66,33 @@ SIZE_G=$((SIZE_B / 1024 / 1024 / 1024))
 
 USED_G=$(df -B1 --output=used / | tail -1 | awk '{printf "%.0f", $1/2^30}')
 
+# --- Learn the labels rather than hardcoding them ----------------------------
+# fstab mounts / and /boot/firmware by LABEL=, and /dev/disk/by-label entries
+# are created verbatim — LABEL=system-boot does NOT match a partition labelled
+# SYSTEM-BOOT. This script used to hardcode the uppercase form, which would have
+# booted the firmware fine (it reads the partition directly) and then dropped to
+# an emergency shell when systemd could not mount /boot/firmware. Read the
+# labels off the running card so they match whatever fstab expects.
+BOOT_LABEL=$(lsblk -no LABEL "$(findmnt -no SOURCE /boot/firmware)")
+ROOT_LABEL=$(lsblk -no LABEL "$(findmnt -no SOURCE /)")
+[[ -n $BOOT_LABEL && -n $ROOT_LABEL ]] || die "could not read current filesystem labels"
+grep -q "LABEL=$ROOT_LABEL[[:space:]]" /etc/fstab || die "fstab does not mount / by LABEL=$ROOT_LABEL; check it by hand"
+
+# Match the existing swapfile rather than assuming 1GiB.
+if [[ -f /swapfile ]]; then
+    SWAP_MB=$(( $(stat -c %s /swapfile) / 1024 / 1024 ))
+else
+    SWAP_MB=0
+fi
+
 say "About to ERASE $TARGET"
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MODEL "$TARGET"
 echo
 echo "  Target size:     ${SIZE_G} GiB"
 echo "  Data to copy:    ${USED_G} GiB (current root, minus swap)"
 echo "  This card:       $ROOTDEV  (will NOT be touched)"
+echo "  Labels to apply: $BOOT_LABEL (boot), $ROOT_LABEL (root)"
+echo "  Swapfile:        ${SWAP_MB} MiB"
 echo
 read -rp "Type ERASE to continue: " confirm
 [[ $confirm == ERASE ]] || die "aborted"
@@ -85,7 +128,7 @@ else die "cannot find new partitions on $TARGET"; fi
 # would make LABEL= lookups ambiguous while the copy runs. Renamed at the end.
 say "Formatting $P1 (boot) and $P2 (root)"
 mkfs.vfat -F 32 -n SYSBOOTNEW "$P1"
-mkfs.ext4 -F -L writable-new "$P2"
+mkfs.ext4 -F -L newroot-tmp "$P2"
 
 # --- Mount ------------------------------------------------------------------
 say "Mounting new card at $NEWROOT"
@@ -116,10 +159,12 @@ rsync -rltD --info=progress2 --delete \
     /boot/firmware/ "$NEWROOT/boot/firmware/"
 
 # --- Swap file --------------------------------------------------------------
-say "Recreating 1GiB swapfile"
-dd if=/dev/zero of="$NEWROOT/swapfile" bs=1M count=1024 status=none
-chmod 600 "$NEWROOT/swapfile"
-mkswap "$NEWROOT/swapfile" >/dev/null
+if (( SWAP_MB > 0 )); then
+    say "Recreating ${SWAP_MB}MiB swapfile"
+    dd if=/dev/zero of="$NEWROOT/swapfile" bs=1M count="$SWAP_MB" status=none
+    chmod 600 "$NEWROOT/swapfile"
+    mkswap "$NEWROOT/swapfile" >/dev/null
+fi
 
 # --- Finish -----------------------------------------------------------------
 say "Flushing to card"
@@ -128,10 +173,28 @@ umount "$NEWROOT/boot/firmware"
 umount "$NEWROOT"
 
 say "Applying final labels"
-fatlabel "$P1" SYSTEM-BOOT
-e2label "$P2" writable
+# fatlabel warns about lowercase labels; it stores them correctly regardless,
+# and lowercase is what fstab asks for on an Ubuntu image.
+fatlabel "$P1" "$BOOT_LABEL"
+e2label "$P2" "$ROOT_LABEL"
 e2fsck -fp "$P2" || true
 sync
+
+# --- Verify before declaring success ----------------------------------------
+# The failure this catches is a silent one: wrong labels boot the firmware fine
+# and then strand you in an emergency shell, with no obvious cause on screen.
+say "Verifying"
+partprobe "$TARGET" 2>/dev/null || true; sleep 2
+NEW_BOOT=$(blkid -s LABEL -o value "$P1" 2>/dev/null || true)
+NEW_ROOT=$(blkid -s LABEL -o value "$P2" 2>/dev/null || true)
+ok=true
+[[ $NEW_BOOT == "$BOOT_LABEL" ]] || { echo "  MISMATCH: boot label is '$NEW_BOOT', fstab wants '$BOOT_LABEL'"; ok=false; }
+[[ $NEW_ROOT == "$ROOT_LABEL" ]] || { echo "  MISMATCH: root label is '$NEW_ROOT', fstab wants '$ROOT_LABEL'"; ok=false; }
+if $ok; then
+    echo "  labels OK:  $P1 = $NEW_BOOT,  $P2 = $NEW_ROOT"
+else
+    die "labels are wrong — the new card would drop to an emergency shell. Fix with: fatlabel $P1 $BOOT_LABEL ; e2label $P2 $ROOT_LABEL"
+fi
 
 say "DONE"
 echo "New card is ready. To use it:"
