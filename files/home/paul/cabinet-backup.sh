@@ -86,6 +86,11 @@ DIRS=(
     /home/paul/.config/wireplumber/wireplumber.conf.d   # HDMI volume + no-suspend
     /home/paul/.attract/emulators
     /home/paul/.attract/romlists
+    # Tag files live one level deeper and the copy loop is maxdepth 1, so these
+    # need naming explicitly. Favourites are stored here too -- losing this
+    # directory means losing every game Paul ever starred.
+    /home/paul/.attract/romlists/mame
+    /home/paul/.attract/romlists/mame-all
     /home/paul/arcade/artwork            # custom scanline overlays
     /home/paul/arcade/shaders            # GLSL sharp-bilinear + scanline shader
     /home/paul/arcade/plymouth-theme     # boot splash theme
