@@ -26,20 +26,48 @@
 #
 # Installed as a drop-in so the original unit is untouched and --undo is a
 # single file removal.
+#
+# ---------------------------------------------------------------------------
+# SECOND CAUSE, found later: the login prompt came back, on a DIFFERENT VT.
+#
+# arcade.service sets SDL_VIDEODRIVER=kmsdrm, and MAME inherits it from
+# Attract-Mode. Two SDL/KMSDRM programs cannot share one VT, so every time a
+# game launches SDL claims a FREE vt and switches to it. logind's autovt
+# mechanism (NAutoVTs=6 by default) then spawns getty@thatVT, and the moment
+# MAME hands back DRM master the login prompt is what shows.
+#
+# The evidence was three gettys that were "disabled" yet "active", started
+# within 30 seconds of each other on tty6, tty3 and tty2 -- nothing enabled
+# them, logind spawned them in response to VT switches.
+#
+# Fixing which VT is active at STARTUP (above) cannot help, because the switch
+# happens later, at game launch. The fix is to stop logind creating login
+# prompts on VTs at all: NAutoVTs=0 and ReserveVT=0. A VT switch then reveals a
+# blank console instead of a prompt.
+#
+# This removes local console login entirely. That is the right trade here
+# because there is NO KEYBOARD attached to the cabinet -- the only thing that
+# can type at a console is the control panel, which is exactly the problem.
+# Access is over SSH/Tailscale, which is unaffected.
 
 set -euo pipefail
 
 DROPIN_DIR=/etc/systemd/system/arcade.service.d
 DROPIN="$DROPIN_DIR/10-console-vt.conf"
+LOGIND_DIR=/etc/systemd/logind.conf.d
+LOGIND_CONF="$LOGIND_DIR/10-no-autovt.conf"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "must run with sudo"
 
 if [[ "${1:-}" == "--undo" ]]; then
-    rm -f "$DROPIN"
-    rmdir "$DROPIN_DIR" 2>/dev/null || true
+    rm -f "$DROPIN" "$LOGIND_CONF"
+    rmdir "$DROPIN_DIR" "$LOGIND_DIR" 2>/dev/null || true
     systemctl daemon-reload
-    echo "Removed $DROPIN. Restart the frontend to apply:"
+    systemctl restart systemd-logind
+    echo "Removed $DROPIN and $LOGIND_CONF."
+    echo "Console logins are available again after a reboot."
+    echo "Restart the frontend to apply the rest:"
     echo "    sudo systemctl restart arcade.service"
     exit 0
 fi
@@ -57,13 +85,37 @@ ExecStartPre=+/bin/sh -c '\
     printf "\033[2J\033[3J\033[H" >/dev/tty1 || true'
 EOF
 
+mkdir -p "$LOGIND_DIR"
+cat > "$LOGIND_CONF" <<'EOF'
+# Stop logind spawning a login prompt on any VT. MAME's SDL/KMSDRM backend
+# switches to a free VT on every game launch; without this, logind puts a getty
+# there and that prompt is what bleeds through when the game starts and exits.
+# No keyboard is attached, so a console login has no use here anyway.
+[Login]
+NAutoVTs=0
+ReserveVT=0
+EOF
+
 systemctl daemon-reload
+
+# Stop the gettys logind already spawned. Without this the prompts stay until
+# a reboot, on exactly the VTs that are bleeding through right now.
+for t in 2 3 4 5 6; do
+    systemctl stop "getty@tty$t.service" 2>/dev/null || true
+done
+systemctl restart systemd-logind
+
 echo "Wrote $DROPIN"
+echo "Wrote $LOGIND_CONF"
 echo
-echo "Apply it:"
+echo "Stopped stray gettys. Still running (should be none but tty1):"
+systemctl list-units 'getty@*' --state=active --no-legend | sed 's/^/    /' || true
+echo
+echo "Apply the rest:"
 echo "    sudo systemctl restart arcade.service"
 echo
-echo "Then confirm the active VT is tty1:"
-echo "    cat /sys/class/tty/tty0/active"
+echo "Then launch and exit a game, and confirm no new getty appeared:"
+echo "    systemctl list-units 'getty@*' --state=active"
 echo
+echo "NOTE: this disables console login. Access is via SSH only."
 echo "To revert:  sudo /home/paul/fix-console-bleed.sh --undo"
