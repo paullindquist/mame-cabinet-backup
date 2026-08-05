@@ -55,6 +55,7 @@ FILES=(
     /home/paul/fix-usb-drive-resets.sh
     /home/paul/grant-sudo.sh
     /home/paul/sd-migrate.sh
+    /home/paul/verify-newcard.sh
     /home/paul/fix-audio.sh
     /home/paul/fix-console-bleed.sh
     /home/paul/test-splash.sh
