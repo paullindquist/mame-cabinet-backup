@@ -39,6 +39,7 @@ FILES=(
     /home/paul/mk-controls.py
     /home/paul/panel-test.py
     /home/paul/get-artwork.py
+    /home/paul/progettosnaps-artwork.py
     /home/paul/usb-watch.py
     /home/paul/ssh-keepalive.sh
     /home/paul/cabinet-backup.sh
