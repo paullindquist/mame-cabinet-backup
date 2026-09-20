@@ -11,7 +11,7 @@ PAMName=login
 WorkingDirectory=/home/paul
 Environment=HOME=/home/paul
 Environment=SDL_VIDEODRIVER=kmsdrm
-ExecStart=/usr/local/bin/attractplus
+ExecStart=/usr/local/bin/attractplus --display "Best Games"
 Restart=always
 RestartSec=2
 TTYPath=/dev/tty1
