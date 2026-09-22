@@ -8,7 +8,7 @@ model:      Raspberry Pi 5 Model B Rev 1.0
 os:         Ubuntu 26.04 LTS
 kernel:     7.0.0-1017-raspi
 default:    multi-user.target
-arcade svc: enabled / active
+arcade svc: enabled / inactive
 ```
 
 ## Emulator
